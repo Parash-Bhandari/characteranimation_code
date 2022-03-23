@@ -1,0 +1,294 @@
+
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Character.h"
+#include "Main.generated.h"
+
+UCLASS()
+class UNREALRPG_API AMain : public ACharacter
+{
+	GENERATED_BODY()
+
+public:
+	// Sets default values for this character's properties
+	AMain();
+	// CameraBoom is Positioning the Camera Bind The Player.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	class USpringArmComponent* CameraBoom;
+	/*Follow Camera*/
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	class UCameraComponent* FollowCamera;
+	/*Base turn Rates to Scale turning Functions for the camera*/
+	UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category="Camera")
+	float BaseTurnRate;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+	float BaseLookUpRate;
+
+protected:
+	// Called when the game starts or when spawned
+	virtual void BeginPlay() override;
+
+public:	
+	// Called every frame
+	virtual void Tick(float DeltaTime) override;
+
+	// Called to bind functionality to input
+	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	
+	// Called for forwards //  Backwards input.
+	void MoveForward(float Value);
+
+	// Called for Side to Side input.
+	void MoveRight(float Value);
+	
+	/* Called via input to Turn at a given time
+	@Param Rate this is a normalized rate, i.e 1.0 means 100% of desired turn rate
+	*/
+	void TurnAtRate(float Rate);
+	/* Called via input to Lookup/Down at a given time
+	@Param Rate this is a normalized rate, i.e 1.0 means 100% of desired Lookup/Down rate
+	*/
+	void LookUpAtRate(float Rate);
+
+	FORCEINLINE class USpringArmComponent* GetSpringArmComponent() { return CameraBoom; }
+	FORCEINLINE class UCameraComponent* GetCameraComponent() { return FollowCamera; }
+};
+
+
+// Fill out your copyright notice in the Description page of Project Settings.
+
+
+#include "Main.h"
+#include "GameFramework/SpringArmComponent.h"
+#include "Camera/CameraComponent.h"
+#include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
+#include "Engine/World.h"
+#include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
+// Sets default values
+AMain::AMain()
+{
+	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	PrimaryActorTick.bCanEverTick = true;
+	//Create CameraBoom Towards the player if there is a Collision.
+	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
+	CameraBoom->SetupAttachment(GetRootComponent());
+	CameraBoom->TargetArmLength = 600.f;// Camera Follow at the Distance.
+	CameraBoom->bUsePawnControlRotation = true;//Rotate arm Based on Controller
+
+	// Set Size for Collision For Capsule.
+	GetCapsuleComponent()->SetCapsuleSize(48.f,105.f);
+	//Create Follow Camera
+	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
+	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+	FollowCamera->bUsePawnControlRotation = false;//Attach the Camera to end of the boom adjust match the Controller Orientation
+	
+	// Set Our Rates for Input.
+	BaseTurnRate = 65.f;
+	BaseLookUpRate = 65.f;
+
+	//Don't Rotate When the Controller Rotate.
+	//Let that just affect the Camera.
+	bUseControllerRotationYaw = false;
+	bUseControllerRotationPitch = false;
+	bUseControllerRotationRoll = false;
+
+	//Configure Character Movement
+	GetCharacterMovement()->bOrientRotationToMovement = true; //Properties of GetChracter Movements , Character Moves in The Direction of Input
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.f, 0.0f);// at this Rotation Rate.
+	GetCharacterMovement()->JumpZVelocity = 650.f;
+	GetCharacterMovement()->AirControl = 0.2f; //When falling amount of lateral movement control available to the character. 0 = no control, 1 = full control at max speed of MaxWalkSpeed.
+}
+
+
+// Called when the game starts or when spawned
+void AMain::BeginPlay()
+{
+	Super::BeginPlay();
+	
+}
+
+// Called every frame
+void AMain::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+}
+
+// Called to bind functionality to input
+void AMain::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+	check(PlayerInputComponent);// Check if it Valid or not.
+
+	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
+	PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
+
+	PlayerInputComponent->BindAxis("Move_Forward", this, &AMain::MoveForward);
+	PlayerInputComponent->BindAxis("Move_Right", this, &AMain::MoveRight);
+
+	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
+	PlayerInputComponent->BindAxis("Lookup", this, &APawn::AddControllerPitchInput);
+
+	PlayerInputComponent->BindAxis("TurnRate", this, &AMain::TurnAtRate);
+	PlayerInputComponent->BindAxis("LookUpRate", this, &AMain::LookUpAtRate);
+
+
+
+}
+
+void AMain::MoveForward(float Value)
+{
+ // Controller is inherited from Pawn so it is Already Declared
+	if ((Controller!=nullptr) && (Value != 0.0f))// if it is Zero it doesn't do AnyThing
+	{ 
+		//Find Out Which way is forward
+		const FRotator Rotation = Controller->GetControlRotation();//The Function that return a rotator that gives the Direction that the Controllers Facing
+		const FRotator YawRotation(0.0f,Rotation.Yaw,0.0f);
+		//This is Basically a Forward Vector for the Controller.
+		const FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+		AddMovementInput(Direction, Value);
+		//jatha Camera xa tethai AddMovementInput Laxga
+	}
+}
+
+void AMain::MoveRight(float Value)
+{
+	if ((Controller != nullptr) && (Value != 0.0f))
+	{
+	//Find Out Which way is forward
+	const FRotator Rotation = Controller->GetControlRotation();//The Function that return a rotator that gives the Direction that the Controllers Facing
+	const FRotator YawRotation(0.0f, Rotation.Yaw, 0.0f);
+	//This is Basically a Forward Vector for the Controller.
+	const FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+	AddMovementInput(Direction, Value);
+	}
+}
+
+void AMain::TurnAtRate(float Rate)
+{
+	AddControllerYawInput(Rate * BaseTurnRate * GetWorld()->GetDeltaSeconds());//Delta Seconds is the amount of time elapsed since the last Event Tick.
+}
+
+void AMain::LookUpAtRate(float Rate)
+{
+	AddControllerPitchInput(Rate * BaseLookUpRate * GetWorld()->GetDeltaSeconds());
+}
+
+
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Animation/AnimInstance.h"
+#include "MainAnimInstance.generated.h"
+
+/**
+ * 
+ */
+UCLASS()
+class UNREALRPG_API UMainAnimInstance : public UAnimInstance
+{
+	GENERATED_BODY()
+
+public: 
+
+	virtual void NativeInitializeAnimation() override;// Similar To Begin Play
+				
+	UFUNCTION(BlueprintCallable, Category = "AnimationProperties")
+	void UpdateAnimationProperties();
+	
+	UPROPERTY(EditAnywhere,BlueprintReadOnly,Category="Movement")
+	float MovementSpeed;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement")
+	bool bISInAir;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement")
+	class APawn* Pawn; // it is a Reference to The Character Pawn;
+						/* in an animation blueprint, it would return a reference to
+						the Pawn class that owns the animation instance you're running.*/
+
+	
+};
+
+
+// Fill out your copyright notice in the Description page of Project Settings.
+
+
+#include "MainAnimInstance.h"
+#include "GameFramework/CharacterMovementComponent.h"
+
+void UMainAnimInstance::NativeInitializeAnimation()
+{
+	if (Pawn == nullptr) 
+	{
+		Pawn = TryGetPawnOwner();// This will get actual Animation Instance
+	}
+	
+}
+// calling Every Frame Similar To Tick.
+void UMainAnimInstance::UpdateAnimationProperties()
+{
+	if(Pawn == nullptr)
+	{
+		Pawn = TryGetPawnOwner();
+	}
+	if (Pawn)
+	{
+		FVector Speed = Pawn->GetVelocity();//This Function is Build in Pawn And Pawn can
+											//return just how fast it going at the Particular Frame.
+
+		FVector LateralSpeed = FVector(Speed.X, Speed.Y, 0.f); 
+		MovementSpeed = LateralSpeed.Size();//That is will Give the Magnitude
+
+		bISInAir = Pawn->GetMovementComponent()->IsFalling();
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
